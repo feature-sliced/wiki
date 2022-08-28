@@ -1,11 +1,16 @@
 .scheme {
     justify-content: center;
 
-    &Img {
-        width: 80%;
-        padding-top: 1rem;
-        padding-bottom: 4rem;
-    }
+    display: flex;
+    gap: 32px;
+}
+
+.schemeDiagram {
+    flex: 1 0 0;
+}
+
+.schemeDescription {
+    flex: 0 0 240px;
 }
 
 @media screen and (max-width: 966px) {
