@@ -1,0 +1,203 @@
+---
+sidebar_position: 1
+pagination_next: reference/slices-segments
+---
+
+# Layer
+
+Layer는 Feature-Sliced Design의 기본 구성 단위입니다. Layer의 주 목적은 코드의 책임 범위와 의존성을 기준으로 코드를 체계적으로 구조화하는 것입니다.
+
+총 **7개의 Layer**가 있으며, 책임과 의존성이 높은 순서대로 정렬되어 있습니다:
+
+<img src="/img/layers/folders-graphic-light.svg#light-mode-only" width="180" style={{ float: "right", margin: "0 1em" }} alt="A file system tree, with a single root folder called src and then seven subfolders: app, processes, pages, widgets, features, entities, shared. The processes folder is slightly faded out." />
+<img src="/img/layers/folders-graphic-dark.svg#dark-mode-only" width="180" style={{ float: "right", margin: "0 1em" }} alt="A file system tree, with a single root folder called src and then seven subfolders: app, processes, pages, widgets, features, entities, shared. The processes folder is slightly faded out." />
+
+1. App
+2. Processes (deprecated)
+3. Pages
+4. Widgets
+5. Features
+6. Entities
+7. Shared
+
+모든 Layer를 사용할 필요는 없습니다. 프로젝트에 필요한 Layer만 선택적으로 사용하면 됩니다. 일반적으로 대부분의 Frontend 프로젝트는 최소한 Shared, Pages, App Layer를 포함합니다.
+
+각 Layer는 소문자 폴더명으로 구성됩니다(예: `📁 shared`, `📁 pages`, `📁 app`). Layer의 역할은 표준화되어 있어 _새로운 Layer 추가는 권장되지 않습니다_.
+
+## Import 규칙
+
+Layer는 높은 응집도를 가진 모듈 그룹인 Slice로 구성됩니다. Slice 간 의존성은 **Layer의 Import 규칙**을 따릅니다:
+
+> _Slice 내부 모듈은 자신보다 하위 Layer의 Slice만 Import할 수 있습니다._
+
+예시) `📁 ~/features/aaa` 폴더("aaa" Slice)의 `~/features/aaa/api/request.ts` 파일:
+  - 같은 Layer의 `📁 ~/features/bbb` Import 불가
+  - 하위 Layer인 `📁 ~/entities`와 `📁 ~/shared`는 Import 가능
+  - 같은 Slice 내 파일(`~/features/aaa/lib/cache.ts`) Import 가능
+
+App과 Shared Layer는 **예외**입니다.<br/>
+이들은 Layer이면서 동시에 Slice 역할을 합니다.
+
+일반 Slice는 비즈니스 도메인별로 코드를 분리하지만, Shared는 공통 코드를, App은 전체 도메인 통합을 담당합니다.
+
+따라서 App과 Shared Layer는 Segment로 구성되며, Segment 간 자유로운 Import가 가능합니다.
+
+## Layer 정의
+
+### Shared
+
+Shared Layer는 애플리케이션의 기반을 형성합니다.<br/>
+Backend, 외부 라이브러리, 환경 설정 등을 관리하며, 자체 라이브러리도 정의합니다.
+
+App Layer처럼 Shared Layer도 _Slice를 포함하지 않습니다_.<br/>
+Slice는 비즈니스 도메인 분리용이지만, Shared는 도메인 독립적이기 때문입니다.<br/>
+따라서 Shared Layer 내 파일들은 자유롭게 서로 Import할 수 있습니다.
+
+주요 Segment:
+
+- `📁 api` — API client와 Backend endpoint 요청 함수
+- `📁 ui` — Application UI kit
+  - 비즈니스 로직 제외, 비즈니스 테마 허용
+  - 회사 로고, 페이지 layout 등 포함 가능
+  - UI 로직 Component(자동완성, 검색창 등) 포함 가능
+- `📁 lib` — 내부 라이브러리
+  - 단순 utility 폴더가 아님([참고][ext-sova-utility-dump])
+  - 각 라이브러리는 특정 영역(날짜, 색상, 텍스트 처리 등) 담당
+  - README로 명확한 문서화 필요
+- `📁 config` — 전역 설정(환경 변수, feature flag 등)
+- `📁 routes` — Route 상수와 패턴
+- `📁 i18n` — i18n 설정과 전역 번역
+
+추가 Segment는 가능하나 목적이 명확해야 합니다. `components`, `hooks`, `types`같은 모호한 이름은 지양합니다.
+
+### Entity
+
+**Entity Slice**는 다음 요소들을 포함할 수 있습니다:
+
+- Data Store (`📁 model`)
+Entity 관련 데이터 구조와 상태 관리
+
+- Data Validation Schema (`📁 model`)
+Entity 데이터 검증을 위한 schema 정의
+
+- API Request Function (`📁 api`)
+Entity 관련 API request function
+
+- Entity UI 표현 (`📁 ui`)
+Interface에서 Entity의 시각적 표현
+  - 완전한 UI block 생성은 불필요
+  - 여러 page에서 재사용 가능한 디자인
+  - Business logic은 props나 slot으로 연결
+
+#### Entity 관계
+
+FSD에서 Entity는 Slice이며, 기본적으로 각 Slice는 독립적입니다. 하지만 실제로는 Entity 간 상호작용이 필요합니다. 때로는 한 Entity가 다른 Entity를 포함하기도 합니다.<br/>
+이러한 Entity 간 Business logic은 Features나 Pages 같은 상위 Layer에서 관리하는 것이 좋습니다.
+
+한 Entity의 data object가 다른 data object를 포함할 때는 `@x` 표기법으로 Entity 간 연결을 명시합니다.
+  - 이는 Slice 격리를 우회하면서 Entity 관계를 명확히 표현
+  - 연결된 Entity들은 함께 refactoring될 가능성이 높음
+
+예를 들어:
+
+```ts title="entities/artist/model/artist.ts"
+import type { Song } from "entities/song/@x/artist";
+
+export interface Artist {
+  name: string;
+  songs: Array<Song>;
+}
+```
+
+```ts title="entities/song/@x/artist.ts"
+export type { Song } from "../model/song.ts";
+```
+
+`@x` 표기법에 대한 자세한 내용은 [Cross-Import를 위한 Public API][public-api-for-cross-imports]를 참조하세요.
+
+### Feature
+
+이 Layer는 사용자의 주요 상호작용을 처리합니다.<br/>
+이러한 상호작용은 앱의 Business Entity와 밀접하게 연관됩니다.
+
+Feature Layer 사용 시 중요한 원칙은 **모든 것을 Feature로 만들 필요는 없다**는 점입니다.<br/>
+Feature 정의의 좋은 기준은 여러 page에서의 재사용 여부입니다.
+
+예시) 여러 editor에서 공통으로 사용되는 comment 기능은 재사용 가능한 Feature가 될 수 있습니다.<br/>
+단, Feature Layer는 코드 탐색 메커니즘이므로, 너무 많은 Feature는 중요 기능을 찾기 어렵게 만듭니다.
+
+이상적으로는, 새로운 프로젝트 참여 시 Page와 Feature 검토만으로 프로젝트의 기능을 파악할 수 있어야 합니다.
+
+Feature Slice는 다음을 포함할 수 있습니다:
+- 상호작용 UI (`📁 ui`)
+- API 호출 (`📁 api`)
+- 검증 및 상태 관리 (`📁 model`)
+- Feature Flag (`📁 config`)
+
+### Widget
+
+Widget Layer는 독립적인 대형 UI Block을 구성하는 Layer입니다.<br/>
+Widget은 여러 page에서 재사용되거나, 한 page 내 여러 독립 Block이 필요할 때 적합합니다.
+
+단, UI Block이 page의 주요 내용이고 재사용되지 않는다면,
+**Widget으로 분리하지 말고** page 내부에 직접 구현하는 것이 좋습니다.
+
+:::tip
+
+[Remix][ext-remix]와 같은 Nested Routing System 사용 시 Widget Layer가 유용합니다.
+Widget Layer는 Page Layer와 유사하게 작동하여:
+- Data Fetching
+- Loading State
+- Error Boundary
+등을 포함한 완전한 Router Block 생성이 가능합니다.
+
+또한 Page Layout도 이 Layer에서 관리할 수 있습니다.
+
+:::
+
+### Page
+
+Page Layer는 웹사이트와 Application의 screen 또는 activity를 나타냅니다.<br/>
+보통 하나의 page는 하나의 Slice이지만, login/register form처럼 유사한 page들은 하나의 Slice로 그룹화할 수 있습니다.
+
+팀이 코드를 쉽게 찾을 수 있다면, Page Slice 내 코드 양에 제한은 없습니다.<br/>
+특히 재사용되지 않는 UI Block은 Page Slice 내부에 두는 것이 좋습니다.
+
+Page Slice 구성요소:
+
+- UI Block과 State 관리 (`📁 ui`)
+  - Page UI, Loading State, Error Boundary 관리
+- Data 처리 (`📁 api`)
+  - Data Fetching과 Mutation 처리
+
+일반적으로 Page는 전용 Data Model을 갖지 않으며,<br/>
+작은 State는 Component 내부에서 관리합니다.
+
+### Process
+
+:::caution
+
+이 Layer는 Deprecated되었습니다. 관련 로직을 `features`와 `app` Layer로 이동하는 것을 권장합니다.
+
+:::
+
+Process Layer는 multi-page 상호작용을 위한 대안이었으나, 의도적으로 모호하게 정의되었으며 사용을 권장하지 않습니다.
+
+Router Level과 Server Level 로직은 App Layer에 포함하는 것이 좋습니다. App Layer가 너무 커지거나 로직 분리가 필요할 때만 Process Layer 사용을 고려하세요.
+
+### App
+
+App Layer는 Application 전반의 기술적(Context Provider)이고 비즈니스적(Analytics)인 문제를 다룹니다.
+
+Shared Layer처럼 Slice를 포함하지 않고, 직접 Segment로 구성됩니다.
+
+주요 Segment:
+
+- `📁 routes` — Router 설정
+- `📁 store` — Global State Store 설정
+- `📁 styles` — Global Style
+- `📁 entrypoint` — Application Entry Point와 Framework 설정
+
+[public-api-for-cross-imports]: /docs/reference/public-api#public-api-for-cross-imports
+[ext-remix]: https://remix.run
+[ext-sova-utility-dump]: https://dev.to/sergeysova/why-utils-helpers-is-a-dump-45fo
